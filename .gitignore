@@ -1,0 +1,11 @@
+/target/
+/.cargo/config*.toml
+/work/
+/artifacts/
+*.db
+*.db-wal
+*.db-shm
+*.xmp
+*.snap
+*.log
+.DS_Store
