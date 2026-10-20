@@ -44,6 +44,7 @@ pub fn extract(
     sample: Option<usize>,
     sidecars: bool,
 ) -> Result<Manifest> {
+    source.ensure_unchanged()?;
     let destination = crate::io::physical_absolute(destination)?;
     ensure!(
         !destination.exists(),
@@ -127,10 +128,7 @@ pub fn extract(
     let mut writer = writer.finish()?;
     writer.flush()?;
     writer.get_ref().sync_all()?;
-    ensure!(
-        hash_file(&source.path)? == source.sha256,
-        "database changed during extraction; repeat with stable backup"
-    );
+    source.ensure_unchanged()?;
     let manifest = Manifest {
         format: "digikam2lightcraft-bundle".to_string(),
         version: BUNDLE_VERSION,

@@ -6,7 +6,7 @@ use serde_json::Value;
 
 pub type Row = BTreeMap<String, Value>;
 pub const BUNDLE_VERSION: u32 = 1;
-pub const ADAPTER: &str = "lightcraft-0.9-v1";
+pub const ADAPTER: &str = "lightcraft-0.9-v2";
 pub const MAX_LINE: u64 = 64 * 1024 * 1024;
 pub const MAX_PACKET: u64 = 16 * 1024 * 1024;
 

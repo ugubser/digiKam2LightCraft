@@ -40,6 +40,15 @@ pub struct Source {
 }
 
 impl Source {
+    pub fn ensure_unchanged(&self) -> Result<()> {
+        ensure_no_wal(&self.path)?;
+        ensure!(
+            hash_file(&self.path)? == self.sha256,
+            "database changed during extraction; retry with a stable backup"
+        );
+        Ok(())
+    }
+
     pub fn open(path: &Path, roots: Vec<RootMapping>) -> Result<Self> {
         let path = path.canonicalize().context("source database must exist")?;
         ensure!(
@@ -60,11 +69,7 @@ impl Source {
                 .context("mapped photo root must exist")?;
             ensure!(root.path.is_dir(), "root is not a directory");
         }
-        let wal = PathBuf::from(format!("{}-wal", path.display()));
-        ensure!(
-            !wal.exists() || wal.metadata()?.len() == 0,
-            "source has a WAL: close digiKam and take a consistent SQLite backup first; source was not changed"
-        );
+        ensure_no_wal(&path)?;
         let main = read_bounded(&path, DATABASE_LIMIT)?;
         let sha256 = digest(&main);
         let db = Database::open_with_wal(main, &[]).map_err(anyhow::Error::msg)?;
@@ -74,6 +79,34 @@ impl Source {
             let columns = table
                 .column_names
                 .context("table has unsupported column declarations")?;
+            let required: &[&str] = match table.name.as_str() {
+                "Settings" => &["keyword", "value"],
+                "AlbumRoots" => &["id"],
+                "Albums" => &["id", "albumRoot", "relativePath"],
+                "Images" => &["id", "album", "name", "status", "category"],
+                "ImageInformation" => &[
+                    "imageid",
+                    "rating",
+                    "width",
+                    "height",
+                    "orientation",
+                    "format",
+                    "creationDate",
+                ],
+                "ImageTags" => &["imageid", "tagid"],
+                "Tags" => &["id", "pid", "name"],
+                "TagProperties" => &["tagid", "property", "value"],
+                "ImageRelations" => &["subject", "object", "type"],
+                name if PHOTO_TABLES.contains(&name) => &["imageid"],
+                _ => &[],
+            };
+            for column in required {
+                ensure!(
+                    columns.iter().any(|name| name == column),
+                    "unsupported digiKam schema: {} is missing required column {column}",
+                    table.name
+                );
+            }
             let records = db
                 .read_table(table.rootpage, columns.len())
                 .map_err(anyhow::Error::msg)
@@ -254,6 +287,7 @@ impl Source {
             .into_iter()
             .map(|(key, (_, _, id))| (key, id))
             .collect();
+        ensure_no_wal(&path)?;
         ensure!(
             hash_file(&path)? == sha256,
             "database changed while being read; retry with a stable backup"
@@ -396,4 +430,17 @@ fn read_packets(photo: &Path, owns_stem: bool) -> Result<Vec<Packet>> {
         });
     }
     Ok(out)
+}
+
+fn ensure_no_wal(path: &Path) -> Result<()> {
+    let wal = PathBuf::from(format!("{}-wal", path.display()));
+    match std::fs::metadata(&wal) {
+        Ok(m) => ensure!(
+            m.len() == 0,
+            "source has a WAL: close digiKam and take a consistent SQLite backup first; source was not changed"
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e).context("cannot inspect source WAL"),
+    }
+    Ok(())
 }

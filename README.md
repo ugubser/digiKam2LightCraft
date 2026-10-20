@@ -19,6 +19,8 @@ Initial builds fetch the pinned LightCraft dependencies. Runtime has no network 
 
 Use a stable backup of `digikam4.db`. A nonempty SQLite WAL is rejected: take a consistent SQLite backup first rather than separating a live database from its WAL. Nothing in the source database, photo directories or sidecars is written.
 
+Report outputs selected with `--output` require a new `.json` path outside source data and migration bundles. Existing files are never replaced by these commands.
+
 Map every active digiKam album root explicitly. The numeric root id appears in the `AlbumRoots` table. Mappings can be repeated for multiple roots.
 
 ```sh
@@ -96,7 +98,9 @@ The bundle preserves the **core database and adjacent XMP packets**. It does not
 
 Keep the bundle and the destination's `Interop/digikam2lightcraft` directory. After upgrading the adapter, run `import` again against the same bundle and library. For example, `--faces all` can add previously archived automatic regions without replacing a changed rating or develop adjustment.
 
-Stable identities are `(source database UUID, digiKam image id)`. The importer records fingerprints for independent groups: rating, flag, label, captured time, duration, develop, source path, filename, technical information, descriptive metadata, keywords and regions. On replay:
+Stable identities are `(source database UUID, digiKam image id)`. Replay is intended for the same immutable bundle. A refreshed source snapshot must retain the same catalog lineage and stable image ids; regenerated catalogs or reused ids need a fresh destination.
+
+The importer records fingerprints for independent groups: rating, flag, label, captured time, duration, develop, source path, filename, technical information, descriptive metadata, keywords and regions. On replay:
 
 - A value still equal to its last imported value can receive a new mapping.
 - A value changed in LightCraft is preserved and reported.

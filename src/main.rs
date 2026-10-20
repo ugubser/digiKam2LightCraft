@@ -111,7 +111,19 @@ fn run() -> Result<()> {
             let source = Source::open(&source.database, source.root)?;
             let report = bundle::inspect(&source)?;
             if let Some(path) = output {
-                io::atomic_json(&io::absolute(&path)?, &report)?;
+                let mut protected = source
+                    .roots
+                    .iter()
+                    .map(|r| r.path.clone())
+                    .collect::<Vec<_>>();
+                protected.push(
+                    source
+                        .path
+                        .parent()
+                        .context("source database parent")?
+                        .to_path_buf(),
+                );
+                io::new_report(&path, &report, &protected)?;
             }
             report
         }
@@ -147,7 +159,23 @@ fn run() -> Result<()> {
         Command::Inventory { bundle, output } => {
             let report = inventory::inspect(&bundle)?;
             if let Some(path) = output {
-                io::atomic_json(&io::absolute(&path)?, &report)?;
+                let manifest: digikam2lightcraft::model::Manifest = serde_json::from_slice(
+                    &io::read_bounded(&bundle.join("manifest.json"), 4 * 1024 * 1024)?,
+                )?;
+                let mut protected = manifest
+                    .roots
+                    .into_iter()
+                    .map(|r| r.path)
+                    .collect::<Vec<_>>();
+                protected.push(
+                    manifest
+                        .source_db
+                        .parent()
+                        .context("source database parent")?
+                        .to_path_buf(),
+                );
+                protected.push(bundle);
+                io::new_report(&path, &report, &protected)?;
             }
             report
         }

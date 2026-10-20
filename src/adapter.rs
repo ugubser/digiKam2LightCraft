@@ -142,18 +142,18 @@ pub fn map(
         .collect::<Vec<_>>()
         .join(" ");
     photo.meta.lens = text(md, "lens");
-    photo.meta.aperture = number(md, "aperture")
-        .filter(|n| *n > 0.0 && *n < f32::MAX as f64)
-        .map(|n| n as f32);
-    photo.meta.focal_mm = number(md, "focalLength")
-        .filter(|n| *n > 0.0 && *n < f32::MAX as f64)
-        .map(|n| n as f32);
+    photo.meta.aperture = number(md, "aperture").and_then(positive_f32);
+    photo.meta.focal_mm = number(md, "focalLength").and_then(positive_f32);
     photo.meta.iso = integer(md, "sensitivity")
         .and_then(|n| u32::try_from(n).ok())
         .filter(|n| *n > 0);
     if let Some(t) = number(md, "exposureTime").filter(|n| *n > 0.0) {
-        photo.meta.shutter = if t < 1.0 {
-            format!("1/{:.0}", 1.0 / t)
+        let reciprocal = t.recip();
+        photo.meta.shutter = if t < 1.0
+            && reciprocal.is_finite()
+            && (reciprocal - reciprocal.round()).abs() <= reciprocal * 0.0001
+        {
+            format!("1/{:.0}", reciprocal.round())
         } else {
             format!("{t}")
         };
@@ -598,4 +598,9 @@ pub fn replace_groups(photo: &Photo, groups: &BTreeMap<String, Value>) -> Result
         }
     }
     Ok(serde_json::from_value(value)?)
+}
+
+fn positive_f32(n: f64) -> Option<f32> {
+    let value = n as f32;
+    (value.is_finite() && value > 0.0).then_some(value)
 }

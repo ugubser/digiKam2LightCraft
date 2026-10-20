@@ -175,3 +175,25 @@ pub fn physical_absolute(path: &Path) -> Result<PathBuf> {
     }
     Ok(physical)
 }
+
+/// User-selected report outputs must not overwrite originals, databases, bundles or existing
+/// files. Internal state/report replacement uses atomic_json with its own managed namespace.
+pub fn new_report<T: Serialize>(path: &Path, value: &T, protected: &[PathBuf]) -> Result<()> {
+    let path = physical_absolute(path)?;
+    ensure!(
+        path.extension().is_some_and(|e| e == "json"),
+        "report output must use a .json filename"
+    );
+    ensure!(
+        !path.try_exists()?,
+        "report output already exists; choose a new filename"
+    );
+    for root in protected {
+        let root = physical_absolute(root)?;
+        ensure!(
+            !path.starts_with(root),
+            "report output must be outside source data and migration bundles"
+        );
+    }
+    atomic_json(&path, value)
+}

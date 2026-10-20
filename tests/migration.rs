@@ -595,3 +595,87 @@ fn pending_without_native_commit_marker_can_be_retried() -> Result<()> {
     assert_eq!(migrate::verify(&path, &library)?["catalogPhotos"], 7);
     Ok(())
 }
+
+#[test]
+fn renamed_required_columns_fail_instead_of_silently_importing_an_empty_library() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    fixture(temp.path())?;
+    sql(
+        temp.path(),
+        "ALTER TABLE Images RENAME COLUMN status TO old_status;",
+    )?;
+    let error = match source(temp.path()) {
+        Ok(_) => anyhow::bail!("renamed required status must be rejected"),
+        Err(e) => e,
+    };
+    assert!(error.to_string().contains("required column status"));
+    Ok(())
+}
+
+#[test]
+fn wal_appearing_after_inspection_rejects_extraction() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    fixture(temp.path())?;
+    let src = source(temp.path())?;
+    std::fs::write(
+        temp.path().join("database/digikam4.db-wal"),
+        b"new transaction",
+    )?;
+    let output = temp.path().join("bundle");
+    assert!(bundle::extract(&src, &output, None, true).is_err());
+    assert!(!output.exists());
+    Ok(())
+}
+
+#[test]
+fn reports_cannot_overwrite_data_or_write_inside_photo_roots() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    fixture(temp.path())?;
+    let original = io::hash_file(&temp.path().join("database/digikam4.db"))?;
+    let out = temp.path().join("photos/forbidden.json");
+    let response = Command::new(env!("CARGO_BIN_EXE_digikam2lightcraft"))
+        .args(["inspect", "--database"])
+        .arg(temp.path().join("database/digikam4.db"))
+        .arg("--root")
+        .arg(format!("1={}", temp.path().join("photos").display()))
+        .arg("--output")
+        .arg(&out)
+        .output()?;
+    assert!(!response.status.success());
+    assert!(!out.exists());
+    let existing = temp.path().join("keep.json");
+    std::fs::write(&existing, "keep")?;
+    assert!(io::new_report(&existing, &serde_json::json!({}), &[]).is_err());
+    assert_eq!(std::fs::read_to_string(existing)?, "keep");
+    assert_eq!(
+        io::hash_file(&temp.path().join("database/digikam4.db"))?,
+        original
+    );
+    Ok(())
+}
+
+#[test]
+fn exposure_metadata_preserves_decimal_seconds_and_rejects_float_underflow() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    fixture(temp.path())?;
+    let src = source(temp.path())?;
+    let mut r = src.record(0, false)?;
+    r.data
+        .get_mut("ImageMetadata")
+        .and_then(|v| v.first_mut())
+        .context("camera metadata")?
+        .insert("exposureTime".to_string(), serde_json::json!(0.4));
+    let (photo, _) = adapter::map(&r, PhotoId(1), "2026-10-20T12:00:00", &Options::default())?;
+    assert_eq!(photo.meta.shutter, "0.4", "0.4 seconds is not 1/2 second");
+    let md = r
+        .data
+        .get_mut("ImageMetadata")
+        .and_then(|v| v.first_mut())
+        .context("camera metadata")?;
+    md.insert("exposureTime".to_string(), serde_json::json!(1e-320));
+    md.insert("aperture".to_string(), serde_json::json!(1e-50));
+    let (photo, _) = adapter::map(&r, PhotoId(1), "2026-10-20T12:00:00", &Options::default())?;
+    assert!(!photo.meta.shutter.contains("inf"));
+    assert_eq!(photo.meta.aperture, None);
+    Ok(())
+}
