@@ -417,6 +417,18 @@ fn read_packets(photo: &Path, owns_stem: bool) -> Result<Vec<Packet>> {
         }
         let bytes = read_bounded(&path, MAX_PACKET)?;
         let sha256 = digest(&bytes);
+        // On a case-insensitive volume (APFS, NTFS) `one.xmp`, `one.XMP` and `one.Xmp` name the
+        // same file. Spellings that differ only in case and have identical bytes are one packet;
+        // distinct files on a case-sensitive volume differ in content and are all kept.
+        let same_file = |p: &Packet| {
+            p.sha256 == sha256
+                && p.path
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(&path.to_string_lossy())
+        };
+        if out.iter().any(same_file) {
+            continue;
+        }
         let (encoding, body) = match String::from_utf8(bytes) {
             Ok(s) => ("utf8", s),
             Err(e) => ("base64", STANDARD.encode(e.into_bytes())),

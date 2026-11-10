@@ -480,7 +480,8 @@ fn root_relocation_and_filesystem_inventory() -> Result<()> {
     let p = s.catalog.photo(PhotoId(1)).context("relocated photo")?;
     match &p.source {
         lightcraft_engine::catalog::Source::File { path } => {
-            assert_eq!(Path::new(path), new_root.join("one.ORF"))
+            // Mapped roots are stored as physical paths (macOS temp dirs are behind /var -> /private/var).
+            assert_eq!(Path::new(path), new_root.canonicalize()?.join("one.ORF"))
         }
         _ => anyhow::bail!("expected file"),
     }
@@ -677,5 +678,36 @@ fn exposure_metadata_preserves_decimal_seconds_and_rejects_float_underflow() -> 
     let (photo, _) = adapter::map(&r, PhotoId(1), "2026-10-20T12:00:00", &Options::default())?;
     assert!(!photo.meta.shutter.contains("inf"));
     assert_eq!(photo.meta.aperture, None);
+    Ok(())
+}
+
+#[test]
+fn camera_make_and_flash_fired_map_to_native_fields() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    fixture(temp.path())?;
+    let src = source(temp.path())?;
+    let mut r = src.record(0, false)?;
+    let (photo, _) = adapter::map(&r, PhotoId(1), "2026-10-20T12:00:00", &Options::default())?;
+    assert_eq!(photo.meta.make, "OLYMPUS");
+    assert_eq!(photo.meta.camera, "OLYMPUS TEST");
+    assert_eq!(
+        photo.meta.flash, None,
+        "no flash column: unknown, not \"did not fire\""
+    );
+    // EXIF Flash values: 0x19 fired (auto), 0x10 did not fire (compulsory off), out of range
+    for (value, expected) in [
+        (serde_json::json!(0x19), Some(true)),
+        (serde_json::json!(0x10), Some(false)),
+        (serde_json::json!(-1), None),
+        (serde_json::json!(0x1_0000), None),
+    ] {
+        r.data
+            .get_mut("ImageMetadata")
+            .and_then(|v| v.first_mut())
+            .context("camera metadata")?
+            .insert("flash".to_string(), value.clone());
+        let (photo, _) = adapter::map(&r, PhotoId(1), "2026-10-20T12:00:00", &Options::default())?;
+        assert_eq!(photo.meta.flash, expected, "flash {value}");
+    }
     Ok(())
 }

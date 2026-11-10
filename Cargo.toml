@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 description = "Replayable, metadata-preserving digiKam to LightCraft migration"
 
 [dependencies]
-lightcraft-engine = { git = "https://github.com/storytold/lightcraft", rev = "d999e382bafbb5d5c54482fdb1d11f6a63bfdf69" }
+lightcraft-engine = { git = "https://github.com/storytold/lightcraft", rev = "e9c29e2c5c5dd1f86cc98677b5dc389f6612fcac" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 clap = { version = "4", features = ["derive"] }

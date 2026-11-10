@@ -2,7 +2,7 @@
 
 A standalone, pure-Rust migration tool for moving a digiKam library into LightCraft. It references originals in place, preserves source metadata for future adapters, and protects subsequent LightCraft edits when an import is replayed.
 
-Version 0.1 supports digiKam's core SQLite catalog, validated against schema 17, and LightCraft catalog format 9. LightCraft's APIs are pinned to commit `d999e382bafbb5d5c54482fdb1d11f6a63bfdf69` (v0.9.1). No LightCraft source checkout or digiKam installation is required to build. Rendering uses the installed LightCraft application; this tool does not decode every original during migration.
+Version 0.1 supports digiKam's core SQLite catalog, validated against schema 17, and LightCraft catalog format 12. LightCraft's APIs are pinned to commit `e9c29e2c5c5dd1f86cc98677b5dc389f6612fcac` (`main` after v0.20.0). LightCraft upgrades a library to its own catalog format when it opens it and refuses a newer format, so the importer's pin must not be older than the LightCraft build you open the library with: otherwise a replay is refused once LightCraft has opened the library. No LightCraft source checkout or digiKam installation is required to build. Rendering uses the installed LightCraft application; this tool does not decode every original during migration.
 
 ## Build
 
@@ -78,7 +78,7 @@ Run `digikam2lightcraft capabilities` for a machine-readable summary.
 | Keywords | Hierarchical paths; internal bookkeeping and provisional person tags are excluded |
 | Pick labels | Accepted → Pick, Rejected → Reject, Pending → `digiKam\|Pending` keyword |
 | Colour labels | Direct native colours; Magenta → Purple, other unsupported colours → descriptive keywords |
-| Text, camera/lens, exposure, capture dates, GPS | Supported native fields; full source values remain archived |
+| Text, camera make/model, lens, exposure, flash fired, capture dates, GPS | Supported native fields; full source values remain archived |
 | GPS altitude/accuracy, IPTC contacts, extra comments/languages | Archived where no native field exists |
 | Face regions | Named annotations by default; `--faces all` includes automatic unnamed detections, `--faces none` omits native annotations |
 | RAW/JPEG sidecars | Exact full-name packet first; shared stem packet belongs to the raw, then the first filename; other packets remain archived |

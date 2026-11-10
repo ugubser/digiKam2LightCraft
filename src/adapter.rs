@@ -45,7 +45,7 @@ pub struct Notice {
 
 pub fn capabilities() -> Value {
     json!({"adapter":ADAPTER,"bundleVersion":1,"referenceOriginals":true,"writeSidecars":false,
-        "native":["ratings","pick/reject","five color labels","hierarchical keywords","captions/title","camera/lens/exposure","capture dates","GPS coordinates","copyright/creator","named face regions","stacks"],
+        "native":["ratings","pick/reject","five color labels","hierarchical keywords","captions/title","camera make/model, lens, exposure, flash fired","capture dates","GPS coordinates","copyright/creator","named face regions","stacks"],
         "approximate":["foreign XMP develop settings","Magenta to Purple"],
         "archived":["Pending pick state","extra color labels","GPS altitude/accuracy","full IPTC contacts","digiKam edit history","saved searches","similarity search definitions","automatic face regions by default","unknown database fields"],
         "video":"catalog records and metadata; no playback/trim/export",
@@ -141,6 +141,11 @@ pub fn map(
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join(" ");
+    photo.meta.make = text(md, "make");
+    // digiKam keeps the EXIF Flash tag value; bit 0 says whether the flash fired.
+    photo.meta.flash = integer(md, "flash")
+        .filter(|n| (0..=0xFFFF).contains(n))
+        .map(|n| n & 1 == 1);
     photo.meta.lens = text(md, "lens");
     photo.meta.aperture = number(md, "aperture").and_then(positive_f32);
     photo.meta.focal_mm = number(md, "focalLength").and_then(positive_f32);
